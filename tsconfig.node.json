@@ -1,0 +1,386 @@
+import { useState } from 'react';
+import { X, Plus, Trash2, Edit2, Save, Loader2, LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
+import type { Watch } from '@/types';
+
+interface AdminPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  watches: Watch[];
+  onAddWatch: (watch: Omit<Watch, 'id'>) => void;
+  onEditWatch: (watch: Watch) => void;
+  onDeleteWatch: (id: number) => void;
+}
+
+export default function AdminPanel({ 
+  isOpen, 
+  onClose, 
+  watches, 
+  onAddWatch, 
+  onEditWatch, 
+  onDeleteWatch 
+}: AdminPanelProps) {
+  const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState('products');
+  const [isEditing, setIsEditing] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    brand: 'CURREN',
+    price: '',
+    originalPrice: '',
+    description: '',
+    features: '',
+    image: '',
+    inStock: true,
+  });
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      brand: 'CURREN',
+      price: '',
+      originalPrice: '',
+      description: '',
+      features: '',
+      image: '',
+      inStock: true,
+    });
+    setIsEditing(null);
+  };
+
+  const handleEdit = (watch: Watch) => {
+    setIsEditing(watch.id);
+    setFormData({
+      name: watch.name,
+      brand: watch.brand,
+      price: watch.price.toString(),
+      originalPrice: watch.originalPrice?.toString() || '',
+      description: watch.description,
+      features: watch.features.join(', '),
+      image: watch.image,
+      inStock: watch.inStock,
+    });
+    setActiveTab('edit');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    const watchData = {
+      name: formData.name,
+      brand: formData.brand,
+      price: parseInt(formData.price),
+      originalPrice: formData.originalPrice ? parseInt(formData.originalPrice) : undefined,
+      description: formData.description,
+      features: formData.features.split(',').map(f => f.trim()).filter(f => f),
+      image: formData.image || '/images/13.jpeg',
+      inStock: formData.inStock,
+    };
+
+    // Simular delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    if (isEditing) {
+      onEditWatch({ ...watchData, id: isEditing });
+      toast.success('Producto actualizado exitosamente');
+    } else {
+      onAddWatch(watchData);
+      toast.success('Producto agregado exitosamente');
+    }
+    
+    resetForm();
+    setActiveTab('products');
+    setIsSubmitting(false);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm('¿Estás seguro de eliminar este producto?')) {
+      onDeleteWatch(id);
+      toast.success('Producto eliminado exitosamente');
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    onClose();
+    toast.success('Sesión cerrada');
+  };
+
+  if (!isOpen || !user || user.role !== 'admin') return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/90 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-red-900/30 to-gray-900 p-4 sm:p-6 flex items-center justify-between border-b border-gray-800">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">
+              Panel de Administración
+            </h2>
+            <p className="text-gray-400 text-sm">Bienvenido, {user.name}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-gray-400 hover:text-red-500"
+            >
+              <LogOut className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Cerrar sesión</span>
+            </Button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors p-2"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-4 sm:p-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2 bg-gray-800 mb-6">
+              <TabsTrigger 
+                value="products" 
+                className="data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400"
+              >
+                Productos ({watches.length})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="edit"
+                className="data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400"
+              >
+                {isEditing ? 'Editar Producto' : 'Agregar Producto'}
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* Products List */}
+            <TabsContent value="products" className="mt-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {watches.map((watch) => (
+                  <Card key={watch.id} className="bg-gray-800 border-gray-700">
+                    <CardContent className="p-4">
+                      <div className="flex gap-4">
+                        <img
+                          src={watch.image}
+                          alt={watch.name}
+                          className="w-20 h-20 object-cover rounded-lg"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-medium truncate">{watch.name}</h3>
+                          <p className="text-gray-400 text-sm">{watch.brand}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-red-500 font-semibold">
+                              ${watch.price.toLocaleString()}
+                            </span>
+                            {watch.originalPrice && (
+                              <span className="text-gray-500 line-through text-xs">
+                                ${watch.originalPrice.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          <Badge 
+                            className={`mt-2 ${watch.inStock ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}
+                          >
+                            {watch.inStock ? 'En stock' : 'Agotado'}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(watch)}
+                          className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(watch.id)}
+                          className="border-red-600/50 text-red-500 hover:bg-red-600/20"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              
+              {watches.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">No hay productos registrados</p>
+                  <Button
+                    onClick={() => setActiveTab('edit')}
+                    className="mt-4 bg-red-600 hover:bg-red-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Agregar primer producto
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+            
+            {/* Add/Edit Form */}
+            <TabsContent value="edit" className="mt-0">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Nombre del producto</Label>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Ej: CURREN Chronograph"
+                      required
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Marca</Label>
+                    <select
+                      value={formData.brand}
+                      onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                      className="w-full h-10 px-3 rounded-md bg-gray-800 border border-gray-700 text-white"
+                    >
+                      <option value="CURREN">CURREN</option>
+                      <option value="GUESS">GUESS</option>
+                      <option value="Otros">Otros</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Precio</Label>
+                    <Input
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      placeholder="Ej: 189900"
+                      required
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Precio original (opcional)</Label>
+                    <Input
+                      type="number"
+                      value={formData.originalPrice}
+                      onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })}
+                      placeholder="Para mostrar descuento"
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Descripción</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descripción del producto..."
+                    required
+                    rows={3}
+                    className="bg-gray-800 border-gray-700 text-white resize-none"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Características (separadas por coma)</Label>
+                  <Input
+                    value={formData.features}
+                    onChange={(e) => setFormData({ ...formData, features: e.target.value })}
+                    placeholder="Ej: Cronógrafo, Acero Inoxidable, Resistente al agua"
+                    className="bg-gray-800 border-gray-700 text-white"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-gray-300">URL de la imagen</Label>
+                  <Input
+                    value={formData.image}
+                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                    placeholder="/images/reloj.jpg o URL externa"
+                    className="bg-gray-800 border-gray-700 text-white"
+                  />
+                  <p className="text-gray-500 text-xs">
+                    Deja en blanco para usar imagen por defecto
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="inStock"
+                    checked={formData.inStock}
+                    onChange={(e) => setFormData({ ...formData, inStock: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-red-600"
+                  />
+                  <Label htmlFor="inStock" className="text-gray-300 cursor-pointer">
+                    Producto disponible en stock
+                  </Label>
+                </div>
+                
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetForm}
+                    className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : isEditing ? (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Guardar cambios
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Agregar producto
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </div>
+  );
+}
